@@ -63,3 +63,6 @@ target/
 
 #config files
 *.cfg
+
+#data
+data/

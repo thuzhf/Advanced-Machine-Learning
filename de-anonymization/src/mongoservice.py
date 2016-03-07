@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-07 18:12:12
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-07 18:21:15
+# @Last Modified time: 2016-03-07 18:32:25
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -21,7 +21,7 @@ else:
 from pymongo import MongoClient
 
 class MongoService(object):
-	def __init__(self, host, port, db, username, password):
+	def __init__(self, host, port, db, username, passwd):
 		self.client = MongoClient(host, port)
 		self.db = self.client[db]
-		self.db.authenticate(username, password)
+		self.db.authenticate(username, passwd)
