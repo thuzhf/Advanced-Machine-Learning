@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-07 18:03:23
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-08 01:44:13
+# @Last Modified time: 2016-03-08 02:12:39
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -46,7 +46,7 @@ def preprocess_data(coauthor_file, venues):
         print('Invalid parameters.')
         sys.exit()
 
-    authors = {} # author: {'name': author, 'index': i, 'coauthors': {coauthor_id: 1, ...}}
+    authors = {} # author: {'name': author, 'index': i, 'num_papers': n, 'coauthors': {coauthor_id: 1, ...}}
     index = 0
     with open(coauthor_file) as f:
         lines = f.readlines()
@@ -75,17 +75,22 @@ def preprocess_data(coauthor_file, venues):
                         print(current_paper['index'])
                         sys.exit()
                     if a not in authors:
-                        authors[a] = {'name': a, 'index': index, 'coauthors': {}}
+                        authors[a] = {'name': a, 'index': index, 'num_papers': 0, 'coauthors': {}}
                         index += 1
+                    authors[a]['num_papers'] += 1
                 for a in current_paper['authors']:
                     for b in current_paper['authors']:
-                        b_index = str(authors[b]['index'])
+                        b_index = authors[b]['index']
                         if b_index not in authors[a]['coauthors']:
                             authors[a]['coauthors'][b_index] = 0
                         authors[a]['coauthors'][b_index] += 1
     print('Begin writing to mongodb.')
     for a in authors:
         if not author_info.find_one({'index': authors[a]['index']}):
+            coauthors = []
+            for i in authors[a]['coauthors']:
+                coauthors.append({'index': i, 'num': authors[a]['coauthors'][i]})
+            authors[a]['coauthors'] = coauthors
             author_info.insert_one(authors[a])
 
 
@@ -94,6 +99,8 @@ def main():
     KDD_ICDM = {'KDD': 1, 'SIGKDD': 1, 'ICDM': 1}
     SIGMOD_ICDE = {'SIGMOD': 1, 'ICDE': 1}
     NIPS_ICML = {'NIPS': 1, 'ICML': 1}
+    preprocess_data(coauthor_file, KDD_ICDM)
+    preprocess_data(coauthor_file, SIGMOD_ICDE)
     preprocess_data(coauthor_file, NIPS_ICML)
 
 
