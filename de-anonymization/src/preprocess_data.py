@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-07 18:03:23
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-08 02:12:39
+# @Last Modified time: 2016-03-08 20:58:35
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -22,8 +22,7 @@ import tensorflow as tf
 
 from mongoservice import MongoService
 
-def preprocess_data(coauthor_file, venues):
-    config_file = 'mongo.cfg'
+def get_author_info_from_mongodb(config_file, venues):
     config_parser = configparser.SafeConfigParser()
     with open(config_file) as f:
         config_parser.readfp(f)
@@ -45,6 +44,10 @@ def preprocess_data(coauthor_file, venues):
     else:
         print('Invalid parameters.')
         sys.exit()
+    return author_info
+
+def preprocess_data(coauthor_file, venues, config_file):
+    author_info = get_author_info_from_mongodb(config_file, venues)
 
     authors = {} # author: {'name': author, 'index': i, 'num_papers': n, 'coauthors': {coauthor_id: 1, ...}}
     index = 0
@@ -62,12 +65,16 @@ def preprocess_data(coauthor_file, venues):
             venue = line[2:].strip()
             if venue == '':
                 continue
+            elif venue == 'SIGKDD':
+                venue = 'KDD'
+            elif venue == 'SIGMOD Conference':
+                venue = 'SIGMOD'
             current_paper['venue'] = venue
         elif re.match(r"#index.*", line):
             current_paper['index'] = int(line[6:].strip())
         elif not line.strip(): # paper separatrix
             if not current_paper['authors'] or \
-                not current_paper['venue'] in venues:\
+                not current_paper['venue'] in venues:
                 continue
             else:
                 for a in current_paper['authors']:
@@ -76,32 +83,135 @@ def preprocess_data(coauthor_file, venues):
                         sys.exit()
                     if a not in authors:
                         authors[a] = {'name': a, 'index': index, 'num_papers': 0, 'coauthors': {}}
+                        for v in venues:
+                            authors[a]['coauthors'][v] = {}
                         index += 1
                     authors[a]['num_papers'] += 1
                 for a in current_paper['authors']:
                     for b in current_paper['authors']:
                         b_index = authors[b]['index']
-                        if b_index not in authors[a]['coauthors']:
-                            authors[a]['coauthors'][b_index] = 0
-                        authors[a]['coauthors'][b_index] += 1
+                        if b_index not in authors[a]['coauthors'][current_paper['venue']]:
+                            authors[a]['coauthors'][current_paper['venue']][b_index] = 0
+                        authors[a]['coauthors'][current_paper['venue']][b_index] += 1
     print('Begin writing to mongodb.')
     for a in authors:
         if not author_info.find_one({'index': authors[a]['index']}):
             coauthors = []
-            for i in authors[a]['coauthors']:
-                coauthors.append({'index': i, 'num': authors[a]['coauthors'][i]})
+            for v in authors[a]['coauthors']:
+                for i in authors[a]['coauthors'][v]:
+                    coauthors.append({'venue': v, 'index': i, 'num': authors[a]['coauthors'][v][i]})
             authors[a]['coauthors'] = coauthors
             author_info.insert_one(authors[a])
 
+def calc_num_as_coauthor(config_file, venues):
+    author_info = get_author_info_from_mongodb(config_file, venues)
+    for doc in author_info.find({}):
+        num_as_coauthor = {}
+        for v in venues:
+            num_as_coauthor[v] = 0
+        for c in doc['coauthors']:
+            num_as_coauthor[c['venue']] += 1
+        # num_as_coauthor = [{'venue': k, 'num_as_coauthor': num_as_coauthor[k]} for k in num_as_coauthor]
+        author_info.update_one({'_id': doc['_id']}, {'$set': {'num_as_coauthor': num_as_coauthor}})
+
+def get_num_all_authors(config_file, venues):
+    author_info = get_author_info_from_mongodb(config_file, venues)
+    ret = {}
+    for v in venues:
+        n = author_info.find({'num_as_coauthor.{:s}'.format(v): {'$gte': 1}}).count()
+        ret[v] = n
+    return ret
+
+def calc_tf_idf_for_coauthors(config_file, venues):
+    author_info = get_author_info_from_mongodb(config_file, venues)
+    num_all_authors = get_num_all_authors(config_file, venues)
+    for doc in author_info.find({}):
+        tf_idf_num_coauthors = {}
+        for v in venues:
+            tf_idf_num_coauthors[v] = []
+        for c in doc['coauthors']:
+            tmp = author_info.find_one({'index': c['index']})
+            df = tmp['num_as_coauthor'][c['venue']]
+            N = num_all_authors[c['venue']] + 1
+            tf_idf_value = c['num'] * math.log(N / df)
+            tf_idf_num_coauthors[c['venue']].append({'index': c['index'], 'value': tf_idf_value})
+        author_info.update({'_id': doc['_id']}, {'$set': {'coauthors_tf_idf': tf_idf_num_coauthors}})
+
+def calc_coauthor_feature(config_file, venues):
+    author_info = get_author_info_from_mongodb(config_file, venues)
+    for doc in author_info.find({}):
+        coauthor_feature = {'harmonic_mean': {}, 'cosine': {}, 'binary': {}}
+        for v in doc['coauthors_tf_idf']:
+            for c in doc['coauthors_tf_idf'][v]:
+                if c['index'] not in coauthor_feature['harmonic_mean']:
+                    coauthor_feature['harmonic_mean'][c['index']] = {'value': c['value'], 'num': 1}
+                    coauthor_feature['cosine'][c['index']] = {'value': c['value'], 'num': 1}
+                    coauthor_feature['binary'][c['index']] = {'value': 1, 'num': 1}
+                else:
+                    tmp1 = coauthor_feature['harmonic_mean'][c['index']]['value']
+                    tmp2 = c['value']
+                    tmp = 2 * tmp1 * tmp2 / (tmp1 + tmp2)
+                    coauthor_feature['harmonic_mean'][c['index']]['value'] = tmp
+                    coauthor_feature['harmonic_mean'][c['index']]['num'] += 1
+                    coauthor_feature['cosine'][c['index']]['value'] *= tmp2
+                    coauthor_feature['cosine'][c['index']]['num'] += 1
+                    coauthor_feature['binary'][c['index']]['num'] += 1
+        tmp = []
+        for i in coauthor_feature['harmonic_mean']:
+            tmp.append(i)
+        for i in tmp:
+            if coauthor_feature['harmonic_mean'][i]['num'] == 1:
+                coauthor_feature['harmonic_mean'].pop(i)
+                coauthor_feature['cosine'].pop(i)
+                coauthor_feature['binary'].pop(i)
+        cosine = {}
+        for v in doc['coauthors_tf_idf']:
+            cosine[v] = 0
+            for c in doc['coauthors_tf_idf'][v]:
+                cosine[v] += math.pow(c['value'], 2)
+        numerator = 0
+        denominator = 1
+        for v in cosine:
+            denominator *= math.pow(cosine[v], 0.5)
+        for i in coauthor_feature['cosine']:
+            numerator += coauthor_feature['cosine'][i]['value']
+        if denominator != 0:
+            coauthor_feature['cosine'] = numerator / denominator
+        else:
+            coauthor_feature['cosine'] = 0
+        coauthor_feature['harmonic_mean'] = [{'index': i, 'value': coauthor_feature['harmonic_mean'][i]['value']} \
+            for i in coauthor_feature['harmonic_mean']]
+        coauthor_feature['binary'] = [{'index': i, 'value': coauthor_feature['binary'][i]['value']} \
+            for i in coauthor_feature['binary']]
+        author_info.update({'_id': doc['_id']}, {'$set': {'coauthor_feature': coauthor_feature}})
+
+
 
 def main():
+    config_file = 'mongo.cfg'
     coauthor_file = '../data/publications.txt'
-    KDD_ICDM = {'KDD': 1, 'SIGKDD': 1, 'ICDM': 1}
+    KDD_ICDM = {'KDD': 1, 'ICDM': 1}
     SIGMOD_ICDE = {'SIGMOD': 1, 'ICDE': 1}
     NIPS_ICML = {'NIPS': 1, 'ICML': 1}
-    preprocess_data(coauthor_file, KDD_ICDM)
-    preprocess_data(coauthor_file, SIGMOD_ICDE)
-    preprocess_data(coauthor_file, NIPS_ICML)
+    if 0:
+        # preprocess_data(coauthor_file, KDD_ICDM, config_file)
+        preprocess_data(coauthor_file, SIGMOD_ICDE, config_file)
+        # preprocess_data(coauthor_file, NIPS_ICML, config_file)
+    if 0:
+        # calc_num_as_coauthor(config_file, KDD_ICDM)
+        calc_num_as_coauthor(config_file, SIGMOD_ICDE)
+        # calc_num_as_coauthor(config_file, NIPS_ICML)
+    if 0:
+        tmp = get_num_all_authors(config_file, SIGMOD_ICDE)
+        print(tmp)
+    if 0:
+        calc_tf_idf_for_coauthors(config_file, KDD_ICDM)
+        calc_tf_idf_for_coauthors(config_file, SIGMOD_ICDE)
+        calc_tf_idf_for_coauthors(config_file, NIPS_ICML)
+    if 0:
+        # calc_coauthor_feature(config_file, KDD_ICDM)
+        calc_coauthor_feature(config_file, SIGMOD_ICDE)
+        calc_coauthor_feature(config_file, NIPS_ICML)
 
 
 if __name__ == '__main__':
