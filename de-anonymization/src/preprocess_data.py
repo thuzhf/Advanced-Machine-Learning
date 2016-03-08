@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-07 18:03:23
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-08 20:58:35
+# @Last Modified time: 2016-03-08 23:08:13
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -140,52 +140,126 @@ def calc_tf_idf_for_coauthors(config_file, venues):
 def calc_coauthor_feature(config_file, venues):
     author_info = get_author_info_from_mongodb(config_file, venues)
     for doc in author_info.find({}):
-        coauthor_feature = {'harmonic_mean': {}, 'cosine': {}, 'binary': {}}
-        for v in doc['coauthors_tf_idf']:
-            for c in doc['coauthors_tf_idf'][v]:
-                if c['index'] not in coauthor_feature['harmonic_mean']:
-                    coauthor_feature['harmonic_mean'][c['index']] = {'value': c['value'], 'num': 1}
-                    coauthor_feature['cosine'][c['index']] = {'value': c['value'], 'num': 1}
-                    coauthor_feature['binary'][c['index']] = {'value': 1, 'num': 1}
-                else:
-                    tmp1 = coauthor_feature['harmonic_mean'][c['index']]['value']
-                    tmp2 = c['value']
-                    tmp = 2 * tmp1 * tmp2 / (tmp1 + tmp2)
-                    coauthor_feature['harmonic_mean'][c['index']]['value'] = tmp
-                    coauthor_feature['harmonic_mean'][c['index']]['num'] += 1
-                    coauthor_feature['cosine'][c['index']]['value'] *= tmp2
-                    coauthor_feature['cosine'][c['index']]['num'] += 1
-                    coauthor_feature['binary'][c['index']]['num'] += 1
         tmp = []
-        for i in coauthor_feature['harmonic_mean']:
-            tmp.append(i)
-        for i in tmp:
-            if coauthor_feature['harmonic_mean'][i]['num'] == 1:
-                coauthor_feature['harmonic_mean'].pop(i)
-                coauthor_feature['cosine'].pop(i)
-                coauthor_feature['binary'].pop(i)
-        cosine = {}
         for v in doc['coauthors_tf_idf']:
-            cosine[v] = 0
-            for c in doc['coauthors_tf_idf'][v]:
-                cosine[v] += math.pow(c['value'], 2)
-        numerator = 0
-        denominator = 1
-        for v in cosine:
-            denominator *= math.pow(cosine[v], 0.5)
-        for i in coauthor_feature['cosine']:
-            numerator += coauthor_feature['cosine'][i]['value']
-        if denominator != 0:
-            coauthor_feature['cosine'] = numerator / denominator
-        else:
-            coauthor_feature['cosine'] = 0
-        coauthor_feature['harmonic_mean'] = [{'index': i, 'value': coauthor_feature['harmonic_mean'][i]['value']} \
-            for i in coauthor_feature['harmonic_mean']]
-        coauthor_feature['binary'] = [{'index': i, 'value': coauthor_feature['binary'][i]['value']} \
-            for i in coauthor_feature['binary']]
+            tmp.append(doc['coauthors_tf_idf'][v])
+        harmonic_mean = harmonic_mean_of_two_arrays(*tmp)
+        binary = AND_of_two_arrays(*tmp)
+        cosine = cosine_of_two_arrays(*tmp)
+        coauthor_feature = {'harmonic_mean': harmonic_mean, 'cosine': cosine, 'binary': binary}
         author_info.update({'_id': doc['_id']}, {'$set': {'coauthor_feature': coauthor_feature}})
 
+# def calc_coauthor_feature(config_file, venues):
+#     author_info = get_author_info_from_mongodb(config_file, venues)
+#     for doc in author_info.find({}):
+#         coauthor_feature = {'harmonic_mean': {}, 'cosine': {}, 'binary': {}}
+#         for v in doc['coauthors_tf_idf']:
+#             for c in doc['coauthors_tf_idf'][v]:
+#                 if c['index'] not in coauthor_feature['harmonic_mean']:
+#                     coauthor_feature['harmonic_mean'][c['index']] = {'value': c['value'], 'num': 1}
+#                     coauthor_feature['cosine'][c['index']] = {'value': c['value'], 'num': 1}
+#                     coauthor_feature['binary'][c['index']] = {'value': 1, 'num': 1}
+#                 else:
+#                     tmp1 = coauthor_feature['harmonic_mean'][c['index']]['value']
+#                     tmp2 = c['value']
+#                     tmp = 2 * tmp1 * tmp2 / (tmp1 + tmp2)
+#                     coauthor_feature['harmonic_mean'][c['index']]['value'] = tmp
+#                     coauthor_feature['harmonic_mean'][c['index']]['num'] += 1
+#                     coauthor_feature['cosine'][c['index']]['value'] *= tmp2
+#                     coauthor_feature['cosine'][c['index']]['num'] += 1
+#                     coauthor_feature['binary'][c['index']]['num'] += 1
+#         tmp = []
+#         for i in coauthor_feature['harmonic_mean']:
+#             tmp.append(i)
+#         for i in tmp:
+#             if coauthor_feature['harmonic_mean'][i]['num'] == 1:
+#                 coauthor_feature['harmonic_mean'].pop(i)
+#                 coauthor_feature['cosine'].pop(i)
+#                 coauthor_feature['binary'].pop(i)
+#         cosine = {}
+#         for v in doc['coauthors_tf_idf']:
+#             cosine[v] = 0
+#             for c in doc['coauthors_tf_idf'][v]:
+#                 cosine[v] += math.pow(c['value'], 2)
+#         numerator = 0
+#         denominator = 1
+#         for v in cosine:
+#             denominator *= math.pow(cosine[v], 0.5)
+#         for i in coauthor_feature['cosine']:
+#             numerator += coauthor_feature['cosine'][i]['value']
+#         if denominator != 0:
+#             coauthor_feature['cosine'] = numerator / denominator
+#         else:
+#             coauthor_feature['cosine'] = 0
+#         coauthor_feature['harmonic_mean'] = [{'index': i, 'value': coauthor_feature['harmonic_mean'][i]['value']} \
+#             for i in coauthor_feature['harmonic_mean']]
+#         coauthor_feature['binary'] = [{'index': i, 'value': coauthor_feature['binary'][i]['value']} \
+#             for i in coauthor_feature['binary']]
+#         author_info.update({'_id': doc['_id']}, {'$set': {'coauthor_feature': coauthor_feature}})
 
+def harmonic_mean_of_two_arrays(arr1, arr2):
+    ans = {}
+    tmp = [arr1, arr2]
+    for i in range(len(tmp)):
+        for j in tmp[i]:
+            if j['index'] not in ans:
+                ans[j['index']] = {'value': j['value'], 'num': 1}
+            else:
+                t1 = ans[j['index']]['value']
+                t2 = j['value']
+                if t1 + t2 == 0:
+                    t = 0
+                else:
+                    t = 2 * t1 * t2 / (t1 + t2)
+                ans[j['index']]['value'] = t
+                ans[j['index']]['num'] += 1
+    tmp = []
+    for i in ans:
+        if ans[i]['num'] == 2:
+            tmp.append({'index': i, 'value': ans[i]['value']})
+    return tmp
+
+def AND_of_two_arrays(arr1, arr2):
+    ans = {}
+    tmp = [arr1, arr2]
+    for i in range(len(tmp)):
+        for j in tmp[i]:
+            if j['index'] not in ans:
+                ans[j['index']] = {'value': 1, 'num': 1}
+            else:
+                ans[j['index']]['num'] += 1
+    tmp = []
+    for i in ans:
+        if ans[i]['num'] == 2:
+            tmp.append({'index': i, 'value': ans[i]['value']})
+    return tmp
+
+def cosine_of_two_arrays(arr1, arr2):
+    ans = {}
+    tmp = [arr1, arr2]
+    for i in range(len(tmp)):
+        for j in tmp[i]:
+            if j['index'] not in ans:
+                ans[j['index']] = {'value': j['value'], 'num': 1}
+            else:
+                ans[j['index']]['value'] *= j['value']
+                ans[j['index']]['num'] += 1
+    numerator = 0
+    denominator = {}
+    for i in ans:
+        if ans[i]['num'] == 2:
+            numerator += ans[i]['value']
+    for i in range(len(tmp)):
+        denominator[i] = 0
+        for j in tmp[i]:
+            denominator[i] += math.pow(j['value'], 2)
+    denominator2 = 1
+    for i in denominator:
+        denominator2 *= math.pow(denominator[i], 0.5)
+    if denominator2 == 0:
+        return 0
+    else:
+        return numerator / denominator2
 
 def main():
     config_file = 'mongo.cfg'
@@ -208,9 +282,9 @@ def main():
         calc_tf_idf_for_coauthors(config_file, KDD_ICDM)
         calc_tf_idf_for_coauthors(config_file, SIGMOD_ICDE)
         calc_tf_idf_for_coauthors(config_file, NIPS_ICML)
-    if 0:
+    if 1:
         # calc_coauthor_feature(config_file, KDD_ICDM)
-        calc_coauthor_feature(config_file, SIGMOD_ICDE)
+        # calc_coauthor_feature(config_file, SIGMOD_ICDE)
         calc_coauthor_feature(config_file, NIPS_ICML)
 
 
