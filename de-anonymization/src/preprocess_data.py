@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-07 18:03:23
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-08 23:08:13
+# @Last Modified time: 2016-03-09 00:20:20
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -18,7 +18,6 @@ if sys.version_info < (3,): # version 2.x
 else:
     import configparser
     import pickle
-import tensorflow as tf
 
 from mongoservice import MongoService
 
