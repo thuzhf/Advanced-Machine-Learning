@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 02:41:34
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-09 21:56:44
+# @Last Modified time: 2016-03-09 22:08:19
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -24,14 +24,14 @@ from extract_data import DataSet
 
 class HiddenLayer(object):
     """docstring for HiddenLayer"""
-    def __init__(self, x, n_out):
+    def __init__(self, x, n_out, activate_func):
         self.x = x
         self.n_in = self.x.get_shape().as_list()[-1]
         self.n_out = n_out
+        self.activate_func = activate_func
         self.W = tf.Variable(tf.zeros([self.n_in, self.n_out]))
         self.b = tf.Variable(tf.zeros([self.n_out]))
-        self.y = tf.nn.softmax(tf.matmul(self.x, self.W) + self.b)
-        # self.y_ = tf.placeholder(tf.float32, [None, self.n_out])
+        self.y = self.activate_func(tf.matmul(self.x, self.W) + self.b)
 
 
 class LogisticRegression(object):
@@ -43,11 +43,6 @@ class LogisticRegression(object):
         self.W = tf.Variable(tf.zeros([self.n_in, self.n_out]))
         self.b = tf.Variable(tf.zeros([self.n_out]))
         self.y = tf.nn.softmax(tf.matmul(self.x, self.W) + self.b)
-        # self.y_ = tf.placeholder(tf.float32, [None, self.n_out])
-        # self.cross_entropy = -tf.reduce_sum(self.y_ * tf.log(self.y))
-        # self.correct_prediction = tf.equal(tf.argmax(self.y, 1), tf.argmax(self.y_, 1))
-        # self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
-        # self.train_step = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.cross_entropy)
 
     def cross_entropy(self, y_):
         cross_entropy = -tf.reduce_sum(y_ * tf.log(self.y))
@@ -61,7 +56,7 @@ class LogisticRegression(object):
 class MLP(object):
     """docstring for MLP"""
     def __init__(self, dataset_file, train_validate_ratio, n_out, \
-            learning_rate, n_iter, batch_size, validate_frequency, hiddenlayer_params):
+            learning_rate, n_iter, batch_size, validate_frequency, hiddenlayer_params, activate_func):
         self.dataset_file = dataset_file
         self.train_validate_ratio = train_validate_ratio
         self.n_out = n_out
@@ -70,6 +65,7 @@ class MLP(object):
         self.batch_size = batch_size
         self.validate_frequency = validate_frequency
         self.hiddenlayer_params = hiddenlayer_params
+        self.activate_func = activate_func
 
         self.get_dataset()
         self.build_model()
@@ -85,9 +81,9 @@ class MLP(object):
         self.hidden_layers = []
         for i, v in enumerate(self.hiddenlayer_params):
             if i == 0:
-                self.hidden_layers.append(HiddenLayer(self.x, v))
+                self.hidden_layers.append(HiddenLayer(self.x, v, self.activate_func))
             else:
-                self.hidden_layers.append(HiddenLayer(self.hidden_layers[-1].y, v))
+                self.hidden_layers.append(HiddenLayer(self.hidden_layers[-1].y, v, self.activate_func))
         if len(self.hidden_layers) == 0:
             self.logistic_regression_layer = LogisticRegression(self.x, self.n_out)
         else:
@@ -121,14 +117,15 @@ def main():
     train_validate_ratio = 3
     n_out = 2
     learning_rate=0.1
-    n_iter=1000
+    n_iter=10000
     batch_size=200
     validate_frequency = 100
-    hiddenlayer_params = [32,32]
+    hiddenlayer_params = [32, 64]
+    activate_func = tf.tanh
     if 1:
         dataset_file = data_set_file_KDD_ICDM
         model = MLP(dataset_file, train_validate_ratio, n_out, \
-            learning_rate, n_iter, batch_size, validate_frequency, hiddenlayer_params)
+            learning_rate, n_iter, batch_size, validate_frequency, hiddenlayer_params, activate_func)
         model.train()
 
 if __name__ == '__main__':
