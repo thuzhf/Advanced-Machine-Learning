@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 00:18:42
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-09 20:29:47
+# @Last Modified time: 2016-03-09 22:31:28
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -39,8 +39,6 @@ class DataSet(object):
         author_info = get_author_info_from_mongodb(config_file, venues)
         tmp = list(author_info.aggregate([{'$group': {'_id': None, 'max_author_index': {'$max': '$index'}}}]))[0]
         max_author_index = tmp['max_author_index']
-        # num_positive_instances = author_info.find({'num_as_coauthor.ICDM': {'$gte': 1}, \
-        #     'num_as_coauthor.KDD': {'$gte': 1}}).count()
         positive_x = []
         indexes = []
         for doc in author_info.find({'num_as_coauthor.{:s}'.format(venues_list[0]): {'$gte': 1}, 'num_as_coauthor.{:s}'.format(venues_list[1]): {'$gte': 1}}):
@@ -53,7 +51,6 @@ class DataSet(object):
             x[-1] = 0 # label
             positive_x.append(x)
         num_positive_x = len(positive_x)
-        # positive_y = np.ones((num_positive_x, 1))
 
         negative_x = []
         for doc in author_info.find({'num_as_coauthor.{:s}'.format(venues_list[0]): {'$gte': 1}, 'num_as_coauthor.{:s}'.format(venues_list[1]): {'$gte': 1}}):
@@ -92,14 +89,8 @@ class DataSet(object):
         self.test_data_boundary = self.num_data
 
         self.train_data = self.data_set[0:self.train_data_boundary]
-        # self.train_x = self.train_data[:, 0:-2]
-        # self.train_y = self.train_data[:, -2:]
         self.validata_data = self.data_set[self.train_data_boundary:self.validata_data_boundary]
-        # self.validata_x = self.validata_data[:, 0:-2]
-        # self.validata_y = self.validata_data[:, -2:]
         self.test_data = self.data_set[self.validata_data_boundary:self.test_data_boundary]
-        # self.test_x = self.test_data[:, 0:-2]
-        # self.test_y = self.test_data[:, -2:]
 
     def get_x(self, data):
         return data[:, 0:-self.n_out]
@@ -130,10 +121,11 @@ def main():
     data_set_file_SIGMOD_ICDE = '../data/data_set_SIGMOD_ICDE.pkl'
     data_set_file_NIPS_ICML = '../data/data_set_NIPS_ICML.pkl'
     train_validate_ratio = 3
+    n_out = 2
     if 1:
         dataset = DataSet(data_set_file_NIPS_ICML, train_validate_ratio)
         dataset.construct_data(config_file, NIPS_ICML)
-        dataset.extract_data()
+        dataset.extract_data(n_out)
 
 
 if __name__ == '__main__':
