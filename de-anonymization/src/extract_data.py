@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 00:18:42
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-09 02:40:51
+# @Last Modified time: 2016-03-09 20:29:47
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -29,6 +29,8 @@ class DataSet(object):
     def __init__(self, data_set_file, train_validate_ratio):
         self.data_set_file = data_set_file
         self.train_validate_ratio = train_validate_ratio
+        self._epochs_completed = 0
+        self._index_in_epoch = 0
         
     def construct_data(self, config_file, venues):
         if os.path.isfile(self.data_set_file):
@@ -76,10 +78,13 @@ class DataSet(object):
         with open(self.data_set_file, 'wb') as f:
             pickle.dump(data_set, f, pickle.HIGHEST_PROTOCOL)
 
-    def extract_data(self):
+    def extract_data(self, n_out):
         with open(self.data_set_file, 'rb') as f:
             self.data_set = pickle.load(f)
         self.num_data = len(self.data_set)
+        self.n_out = n_out
+        self.n_in = self.data_set.shape[1] - self.n_out
+
         tmp = self.train_validate_ratio + 1 + 1
         self.num_one_fold = int(self.num_data / tmp)
         self.train_data_boundary = int(self.num_one_fold * self.train_validate_ratio)
@@ -87,15 +92,33 @@ class DataSet(object):
         self.test_data_boundary = self.num_data
 
         self.train_data = self.data_set[0:self.train_data_boundary]
-        self.train_x = self.train_data[:, 0:-2]
-        self.train_y = self.train_data[:, -2:]
+        # self.train_x = self.train_data[:, 0:-2]
+        # self.train_y = self.train_data[:, -2:]
         self.validata_data = self.data_set[self.train_data_boundary:self.validata_data_boundary]
-        self.validata_x = self.validata_data[:, 0:-2]
-        self.validata_y = self.validata_data[:, -2:]
+        # self.validata_x = self.validata_data[:, 0:-2]
+        # self.validata_y = self.validata_data[:, -2:]
         self.test_data = self.data_set[self.validata_data_boundary:self.test_data_boundary]
-        self.test_x = self.test_data[:, 0:-2]
-        self.test_y = self.test_data[:, -2:]
+        # self.test_x = self.test_data[:, 0:-2]
+        # self.test_y = self.test_data[:, -2:]
 
+    def get_x(self, data):
+        return data[:, 0:-self.n_out]
+
+    def get_y(self, data):
+        return data[:, -self.n_out:]
+
+    def next_train_batch(self, batch_size):
+        """Return the next `batch_size` examples from this data set."""
+        start = self._index_in_epoch
+        self._index_in_epoch += batch_size
+        if self._index_in_epoch > self.train_data_boundary:
+            self._epochs_completed += 1
+            np.random.shuffle(self.train_data)
+            start = 0
+            self._index_in_epoch = batch_size
+            assert batch_size <= self.train_data_boundary
+        end = self._index_in_epoch
+        return self.train_data[start:end]
 
 def main():
     config_file = 'mongo.cfg'
@@ -111,7 +134,7 @@ def main():
         dataset = DataSet(data_set_file_NIPS_ICML, train_validate_ratio)
         dataset.construct_data(config_file, NIPS_ICML)
         dataset.extract_data()
-        
+
 
 if __name__ == '__main__':
     start_t = time.time()
