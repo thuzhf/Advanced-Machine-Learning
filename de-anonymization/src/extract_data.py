@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 00:18:42
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-10 00:22:05
+# @Last Modified time: 2016-03-10 20:15:27
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -26,9 +26,9 @@ from preprocess_data import get_author_info_from_mongodb, harmonic_mean_of_two_a
 
 class DataSet(object):
     """dataset for training and testing"""
-    def __init__(self, data_set_file, train_validate_ratio, negative_positive_ratio):
+    def __init__(self, data_set_file, train_test, negative_positive_ratio):
         self.data_set_file = data_set_file
-        self.train_validate_ratio = train_validate_ratio
+        self.train_test = train_test
         self._epochs_completed = 0
         self._index_in_epoch = 0
         self.negative_positive_ratio = negative_positive_ratio
@@ -78,22 +78,28 @@ class DataSet(object):
         with open(self.filename, 'wb') as f:
             pickle.dump(data_set, f, pickle.HIGHEST_PROTOCOL)
 
-    def extract_data(self, n_out):
+    def load_data(self, n_out):
         with open(self.filename, 'rb') as f:
             self.data_set = pickle.load(f)
         self.num_data = len(self.data_set)
         self.n_out = n_out
         self.n_in = self.data_set.shape[1] - self.n_out
 
-        tmp = self.train_validate_ratio + 1 + 1
+        tmp = sum(self.train_test)
         self.num_one_fold = int(self.num_data / tmp)
-        self.train_data_boundary = int(self.num_one_fold * self.train_validate_ratio)
-        self.validata_data_boundary = self.train_data_boundary + self.num_one_fold
-        self.test_data_boundary = self.num_data
+        self.train_data_boundary = int(self.num_one_fold * self.train_test[0])
+        # self.test_data_boundary = self.num_data
 
         self.train_data = self.data_set[0:self.train_data_boundary]
-        self.validata_data = self.data_set[self.train_data_boundary:self.validata_data_boundary]
-        self.test_data = self.data_set[self.validata_data_boundary:self.test_data_boundary]
+        self.test_data = self.data_set[self.train_data_boundary:self.num_data]
+
+    def split_data_k_fold(self, k_fold, test_index):
+        self.num_one_fold = self.num_data // k_fold
+        self.test_data_start = self.num_one_fold * test_index
+        self.test_data_end = self.test_data_start + self.num_one_fold
+        self.test_data = self.data_set[self.test_data_start:self.test_data_end]
+        self.train_data = np.concatenate((self.data_set[0:self.test_data_start], self.data_set[self.test_data_end:]))
+        # print('test_data_start: {:d}, test_data_end: {:d}'.format(self.test_data_start, self.test_data_end))
 
     def get_x(self, data):
         return data[:, 0:-self.n_out]
@@ -107,6 +113,7 @@ class DataSet(object):
         self._index_in_epoch += batch_size
         if self._index_in_epoch > self.train_data_boundary:
             self._epochs_completed += 1
+            # print('{:d} epochs completed'.format(self._epochs_completed))
             np.random.shuffle(self.train_data)
             start = 0
             self._index_in_epoch = batch_size
@@ -123,13 +130,13 @@ def main():
     data_set_file_KDD_ICDM = '../data/data_set_KDD_ICDM.pkl'
     data_set_file_SIGMOD_ICDE = '../data/data_set_SIGMOD_ICDE.pkl'
     data_set_file_NIPS_ICML = '../data/data_set_NIPS_ICML.pkl'
-    train_validate_ratio = 3
+    train_test = [4, 1]
     n_out = 2
-    negative_positive_ratio = 2
+    negative_positive_ratio = 1
     if 1:
-        dataset = DataSet(data_set_file_NIPS_ICML, train_validate_ratio, negative_positive_ratio)
+        dataset = DataSet(data_set_file_NIPS_ICML, train_test, negative_positive_ratio)
         dataset.construct_data(config_file, NIPS_ICML)
-        dataset.extract_data(n_out)
+        dataset.load_data(n_out)
 
 
 if __name__ == '__main__':
