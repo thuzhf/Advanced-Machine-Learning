@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 22:21:31
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-09 22:48:38
+# @Last Modified time: 2016-03-09 23:53:07
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -25,11 +25,11 @@ from model import MLP
 
 def main():
     n_out = 10
-    learning_rate=0.001
-    n_iter=1000
-    batch_size=100
+    learning_rate=0.01
+    n_iter=10000
+    batch_size=20
     validate_frequency = 100
-    hiddenlayer_params = []
+    hiddenlayer_params = [500]
     activate_func = tf.tanh
     if 1:
         mnist = mnist_input_data.read_data_sets("../data/MNIST_data/", one_hot=True)

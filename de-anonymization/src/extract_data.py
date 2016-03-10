@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 00:18:42
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-09 22:31:28
+# @Last Modified time: 2016-03-10 00:22:05
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -26,14 +26,16 @@ from preprocess_data import get_author_info_from_mongodb, harmonic_mean_of_two_a
 
 class DataSet(object):
     """dataset for training and testing"""
-    def __init__(self, data_set_file, train_validate_ratio):
+    def __init__(self, data_set_file, train_validate_ratio, negative_positive_ratio):
         self.data_set_file = data_set_file
         self.train_validate_ratio = train_validate_ratio
         self._epochs_completed = 0
         self._index_in_epoch = 0
+        self.negative_positive_ratio = negative_positive_ratio
+        self.filename = '{:s}_{:d}'.format(self.data_set_file, self.negative_positive_ratio)
         
     def construct_data(self, config_file, venues):
-        if os.path.isfile(self.data_set_file):
+        if os.path.isfile(self.filename):
             return
         venues_list = list(venues)
         author_info = get_author_info_from_mongodb(config_file, venues)
@@ -53,30 +55,31 @@ class DataSet(object):
         num_positive_x = len(positive_x)
 
         negative_x = []
-        for doc in author_info.find({'num_as_coauthor.{:s}'.format(venues_list[0]): {'$gte': 1}, 'num_as_coauthor.{:s}'.format(venues_list[1]): {'$gte': 1}}):
-            index = doc['index']
-            coauthors_tf_idf = doc['coauthors_tf_idf']
-            while True:
-                rand_index = random.choice(indexes)
-                if rand_index != index:
-                    break
-            arr1 = coauthors_tf_idf[venues_list[0]]
-            arr2 = author_info.find_one({'index': rand_index})['coauthors_tf_idf'][venues_list[1]]
-            tmp = harmonic_mean_of_two_arrays(arr1, arr2)
-            x = np.zeros(max_author_index + 3)
-            for i in tmp:
-                x[i['index']] = i['value']
-            x[-2] = 0 # label
-            x[-1] = 1 # label
-            negative_x.append(x)
+        for i in range(self.negative_positive_ratio):
+            for doc in author_info.find({'num_as_coauthor.{:s}'.format(venues_list[0]): {'$gte': 1}, 'num_as_coauthor.{:s}'.format(venues_list[1]): {'$gte': 1}}):
+                index = doc['index']
+                coauthors_tf_idf = doc['coauthors_tf_idf']
+                while True:
+                    rand_index = random.choice(indexes)
+                    if rand_index != index:
+                        break
+                arr1 = coauthors_tf_idf[venues_list[0]]
+                arr2 = author_info.find_one({'index': rand_index})['coauthors_tf_idf'][venues_list[1]]
+                tmp = harmonic_mean_of_two_arrays(arr1, arr2)
+                x = np.zeros(max_author_index + 3)
+                for i in tmp:
+                    x[i['index']] = i['value']
+                x[-2] = 0 # label
+                x[-1] = 1 # label
+                negative_x.append(x)
         data_set = np.asarray(positive_x + negative_x)
         np.random.shuffle(data_set)
-        print('Begin pickling data_set to file {:s}'.format(self.data_set_file))
-        with open(self.data_set_file, 'wb') as f:
+        print('Begin pickling data_set to file {:s}'.format(self.filename))
+        with open(self.filename, 'wb') as f:
             pickle.dump(data_set, f, pickle.HIGHEST_PROTOCOL)
 
     def extract_data(self, n_out):
-        with open(self.data_set_file, 'rb') as f:
+        with open(self.filename, 'rb') as f:
             self.data_set = pickle.load(f)
         self.num_data = len(self.data_set)
         self.n_out = n_out
@@ -122,8 +125,9 @@ def main():
     data_set_file_NIPS_ICML = '../data/data_set_NIPS_ICML.pkl'
     train_validate_ratio = 3
     n_out = 2
+    negative_positive_ratio = 2
     if 1:
-        dataset = DataSet(data_set_file_NIPS_ICML, train_validate_ratio)
+        dataset = DataSet(data_set_file_NIPS_ICML, train_validate_ratio, negative_positive_ratio)
         dataset.construct_data(config_file, NIPS_ICML)
         dataset.extract_data(n_out)
 
