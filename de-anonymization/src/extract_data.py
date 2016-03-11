@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 00:18:42
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-10 20:15:27
+# @Last Modified time: 2016-03-11 18:02:24
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -134,9 +134,10 @@ def main():
     n_out = 2
     negative_positive_ratio = 1
     if 1:
-        dataset = DataSet(data_set_file_NIPS_ICML, train_test, negative_positive_ratio)
-        dataset.construct_data(config_file, NIPS_ICML)
+        dataset = DataSet(data_set_file_KDD_ICDM, train_test, negative_positive_ratio)
+        # dataset.construct_data(config_file, KDD_ICDM)
         dataset.load_data(n_out)
+        print(dataset.n_in)
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@
 # @Email:  thuzhf@gmail.com
 # @Date:   2016-03-09 02:41:34
 # @Last Modified by:   zhangfang
-# @Last Modified time: 2016-03-10 23:05:18
+# @Last Modified time: 2016-03-11 18:30:09
 
 from __future__ import print_function,division,unicode_literals,absolute_import
 import sys,os,re,json,gzip,math,time,datetime,functools,contextlib,itertools
@@ -236,7 +236,7 @@ def main():
     patience = 10
     improve_threshold = 1e-4
     if 1:
-        dataset = DataSet(data_set_file_KDD_ICDM, train_test, negative_positive_ratio)
+        dataset = DataSet(data_set_file_NIPS_ICML, train_test, negative_positive_ratio)
         dataset.load_data(n_out)
         print('num of train data: {:d}'.format(dataset.train_data_boundary))
         model = MLP(dataset, n_out, learning_rate, n_iter, batch_size, \

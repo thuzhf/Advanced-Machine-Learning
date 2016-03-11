@@ -1,0 +1,241 @@
+% It is an example file showing how to use the 'sigkddExp.cls' 
+% LaTeX2e document class file for submissions to sigkdd explorations.
+% It is an example which *does* use the .bib file (from which the .bbl file
+% is produced).
+% REMEMBER HOWEVER: After having produced the .bbl file,
+% and prior to final submission,
+% you need to 'insert'  your .bbl file into your source .tex file so as to provide
+% ONE 'self-contained' source file.
+%
+% Questions regarding SIGS should be sent to
+% Adrienne Griscti ---> griscti@acm.org
+%
+% Questions/suggestions regarding the guidelines, .tex and .cls files, etc. to
+% Gerald Murray ---> murray@acm.org
+%
+
+\documentclass{sigkddExp}
+
+\begin{document}
+%
+% --- Author Metadata here ---
+% -- Can be completely blank or contain 'commented' information like this...
+%\conferenceinfo{WOODSTOCK}{'97 El Paso, Texas USA} % If you happen to know the conference location etc.
+%\CopyrightYear{2001} % Allows a non-default  copyright year  to be 'entered' - IF NEED BE.
+%\crdata{0-12345-67-8/90/01}  % Allows non-default copyright data to be 'entered' - IF NEED BE.
+% --- End of author Metadata ---
+
+\title{De-anonymization on Authors using Coauthor List}
+%\subtitle{[Extended Abstract]
+% You need the command \numberofauthors to handle the "boxing"
+% and alignment of the authors under the title, and to add
+% a section for authors number 4 through n.
+%
+% Up to the first three authors are aligned under the title;
+% use the \alignauthor commands below to handle those names
+% and affiliations. Add names, affiliations, addresses for
+% additional authors as the argument to \additionalauthors;
+% these will be set for you without further effort on your
+% part as the last section in the body of your article BEFORE
+% References or any Appendices.
+
+\numberofauthors{1}
+%
+% You can go ahead and credit authors number 4+ here;
+% their names will appear in a section called
+% "Additional Authors" just before the Appendices
+% (if there are any) or Bibliography (if there
+% aren't)
+
+% Put no more than the first THREE authors in the \author command
+%%You are free to format the authors in alternate ways if you have more 
+%%than three authors.
+
+\author{
+%
+% The command \alignauthor (no curly braces needed) should
+% precede each author name, affiliation/snail-mail address and
+% e-mail address. Additionally, tag each line of
+% affiliation/address with \affaddr, and tag the
+%% e-mail address with \email.
+\alignauthor Fang Zhang \\
+       % \affaddr{KEG lab}\\
+       \affaddr{Computer Science, Tsinghua University}\\
+       % \affaddr{Wallamaloo, New Zealand}\\
+       \email{thuzhf@gmail.com}
+% \alignauthor G.K.M. Tobin\\
+%        \affaddr{Institute for Clarity in Documentation}\\
+%        \affaddr{P.O. Box 1212}\\
+%        \affaddr{Dublin, Ohio 43017-6221}\\
+%        \email{webmaster@marysville-ohio.com}
+% \alignauthor Lars Th{\o}rv\"{a}ld\titlenote{This author is the
+% one who did all the really hard work.}\\
+%        \affaddr{The Th{\o}rv\"{a}ld Group}\\
+%        \affaddr{1 Th{\o}rv\"{a}ld Circle}\\
+%        \affaddr{Hekla, Iceland}\\
+%        \email{larst@affiliation.org}
+}
+% \additionalauthors{Additional authors: John Smith (The Th{\o}rvald Group,
+% email: {\texttt{jsmith@affiliation.org}}) and Julius P.~Kumquat
+% (The Kumquat Consortium, email: {\texttt{jpkumquat@consortium.net}}).}
+\date{11 March 2016}
+\maketitle
+\begin{abstract}
+This paper describes how I conduct the de-anonymization on
+authors using their coauthor lists as features. The main model
+I use here is Multi Layer Perceptron model (MLP model). The
+authors and their coauthors I use to train and test are extracted
+from two conferences from the DBLP-Citation-network-V7\footnote{
+Website: https://aminer.org/citation.} dataset.~\cite{Tang:08KDD} I use
+5-fold cross validation to test the dataset. And the average
+precision, recall, and F1 score I get on the test dataset are
+all over 98\%.
+
+\end{abstract}
+
+\section{Introduction}
+Assume that an author A has published several papers on both
+SIGKDD and ICML, there's chance that A's coauthors on SIGKDD
+are very similar with A's coauthors on ICML. If this is true,
+we can train a model based on this feature, and given any two
+authors' coauthors list, we can check whether they are the same
+author.
+
+\section{Dataset}
+I extract 3 pairs of conferences from the above dataset: SIGKDD-ICDM,
+SIGMOD-ICDE and NIPS-ICML. In every conference pair, I extract all authors
+who has published at least one paper on both conferences. And for every
+author, I extract his\\her coauthors list and use this as features.
+
+\section{Features}
+The features I use is every pair of authors' common coauthors list. To be
+specific, if author A and author B share a common coauthor C, C
+will be in their common coauthors list, and we can assign value 1 or somthing
+similar to this feature. And in my experiment, I firstly calculate the tf-idf
+value of every author's coauthors, for example, if author A has a coauthor B on
+SIGKDD, and A has published $N_{AB}$ papers with B on SIGKDD, but B has published
+$N_B$ papers with others on SIGKDD, and there're $N_{ALL}$ authors on SIGKDD, 
+then B's value $V_B$ in A's coauthors list is calculated as follows:
+\begin{equation}
+V_B = N_A * log\frac{N_{ALL} + 1}{N_B}
+\end{equation}
+
+For two authors A in SIGKDD and B in ICDM, both A and B have a coauthors list 
+in which every value is calculated as above. Then we can merge the two list into
+one list to form an input to our model, and value in each position of the merged
+list is calculated as follows: let $A_i$ and $B_i$ denote the corresponding value
+of the $i$th position in the two coauthors list, and $C_i$ denotes the value in 
+the final list of the same position, then we have:
+\begin{equation}
+C_i = \frac{2}{\frac{1}{A_i} + \frac{1}{B_i}}
+\end{equation}
+That's to say $C_i$ is the hamonic mean of $A_i$ and $B_i$. We do this because
+we want that if one of $A_i$ and $B_i$ is too large compare to the other one,
+then $C_i$ won't be too large.
+
+\section{Construct positive and negative instances}
+For the same author in two conferences such as SIGKDD and ICDM, it is a positive
+instance. And in this experiment, I choose the same amount of negative instances
+as positive instances randomly. To be specific, for every author in SIGKDD, I choose
+another author which is not the same as this author in ICDM randomly, and use it 
+as a negative instance.
+
+\section{Model}
+I use MLP model to train and test the dataset. My model's architecture is 
+5671x100x64x2, which indicates our input feature is 5671-dimensional, we
+have two hidden layers, the first hidden layer has 100 perceptrons, and the
+second hidden layer has 64 perceptrons. Our last layer is a logistic regression
+layer which has two outputs. The activation function in both hidden layers is
+sigmoid function. It is because there're 5671 different qualified authors in SIGKDD and 
+ICDM that our input feature also has so many dimensions, and this will change
+if we choose other pair of conferences.
+
+\section{Cross Validation}
+I use 5-fold cross validation to train and test the dataset, and also to decrease
+overfitting.
+
+\section{Tools}
+I use TensorFlow~\cite{tensorflow2015-whitepaper} to construct the model and write code
+in Python.
+%
+%You can also use a citation as a noun in a sentence, as
+% is done here, and in the \citeN{herlihy:methodology} article;
+% use \texttt{{\char'134}citeN} in this case.  You can
+% even say, ``As was shown in \citeyearNP{bowman:reasoning}. . .''
+% or ``. . . which agrees with \citeANP{braams:babel}...'',
+% where the text shows only the year or only the author
+% component of the citation; use \texttt{{\char'134}citeyearNP}
+% or \texttt{{\char'134}citeANP}, respectively,
+% for these.  Most of the various citation commands may
+% reference more than one work \cite{herlihy:methodology,bowman:reasoning}.
+% A complete list of all citation commands available is
+% given in the \textit{Author's Guide}.
+
+\section{Results}
+I test the model on three pair of conferences: SIGKDD-ICDM, SIGMOD-ICDE,
+and NIPS-ICML. And I calculate the precision, recall and F1 score on all
+these three pairs. The test results are in table~\ref{tab:results}.
+We can see that every score is over 98\%, which suggests that our model
+has achieved quite good results.
+
+\begin{table}
+\centering
+\caption{Test Results}
+\label{tab:results}
+\begin{tabular}{|c|c|c|c|} \hline
+ & SIGKDD-ICDM & SIGMOD-ICDE & NIPS-ICML \\ \hline
+Precision & 99.15\% & 99.69\% & 99.68\% \\ \hline
+Recall & 98.06\% & 98.71\% & 98.82\% \\ \hline
+F1 & 98.60\% & 99.20\% & 99.25\% \\
+\hline\end{tabular}
+\end{table}
+
+
+\section{Discussion}
+\subsection{Name Disambiguation}
+In this experiment, I simply treat two authors with the same name in two 
+conferences as the same person. And this is obviously not always correct
+but I it's hard to come up with another solution for me now. And if we
+can solve this problem better, maybe we can get better results too.
+
+\subsection{Choosing parameters}
+When I firstly train the model, I set learning rate to 0.1 and I get much
+worse results, then I adjust the learning rate and other parameters on and on,
+finally I try following parameters in table~\ref{tab:params} and get the 
+above much better results. This kind of work is nonautomatic and tedious.
+And I think it is worthy for us figure out some kind of automatic 
+parameters-adjusting methods in the future, which should be much better 
+than our manual adjustment.
+
+\begin{table}
+\centering
+\caption{Parameters}
+\label{tab:params}
+\begin{tabular}{|c|c|} \hline
+learning rate & 0.001 \\ \hline
+num of iterations & 1000 \\ \hline
+batch size & 100 \\ \hline
+num of hidden layer 1 perceptrons & 100 \\ \hline
+num of hidden layer 2 perceptrons & 64 \\
+\hline\end{tabular}
+\end{table}
+
+%
+% The following two commands are all you need in the
+% initial runs of your .tex file to
+% produce the bibliography for the citations in your paper.
+\bibliographystyle{abbrv}
+\bibliography{sigproc}  % sigproc.bib is the name of the Bibliography in this case
+% You must have a proper ".bib" file
+%  and remember to run:
+% latex bibtex latex latex
+% to resolve all references
+%
+% ACM needs 'a single self-contained file'!
+%
+%APPENDICES are optional
+% SIGKDD: balancing columns messes up the footers: Sunita Sarawagi, Jan 2000.
+% \balancecolumns
+
+% That's all folks!
+\end{document}
